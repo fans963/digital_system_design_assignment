@@ -1,0 +1,4 @@
+vhdl xil_defaultlib  \
+"../../../../digital_tube.srcs/sources_1/ip/window_mult/sim/window_mult.vhd" \
+
+nosort

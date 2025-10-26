@@ -1,0 +1,4 @@
+vhdl xil_defaultlib  \
+"../../../../digital_tube.srcs/sources_1/ip/real_square_mult/sim/real_square_mult.vhd" \
+
+nosort

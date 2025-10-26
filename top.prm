@@ -1,0 +1,14 @@
+===================================
+Configuration Memory information
+===================================
+File Format        MCS
+Interface          SPIX4
+Size               8M
+Start Address      0x00000000
+End Address        0x007FFFFF
+Checksum           0x5EE37ECF
+Fill Value         0xFF
+
+Addr1         Addr2         Date                    File(s)                                                                   Checksum
+0x00000000    0x0021728B    Oct 24 14:52:44 2025    D:/workspace/fpga/vivado/digital_tube/digital_tube.runs/impl_1/top.bit    0x00B49843
+File Checksum Total                                                                                                           0x00B49843

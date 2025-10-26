@@ -1,0 +1,1 @@
+ad_fft.vhd,vhdl,xil_defaultlib,../../../../digital_tube.srcs/sources_1/ip/ad_fft/sim/ad_fft.vhd,
