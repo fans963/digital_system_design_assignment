@@ -74,86 +74,102 @@ module frequency_fft #(
     output logic frequency_valid
 );
 
+  typedef enum logic [3:0] {
+    IDLE           = 4'd0,
+    COLLECT        = 4'd1,
+    PROCESS        = 4'd2,
+    INTERPOLATE    = 4'd3,
+    CALC_NUM_DEN   = 4'd4,
+    CALC_DELTA     = 4'd5,
+    CALC_OFFSET    = 4'd6,
+    CALC_FREQ_MULT = 4'd7,
+    CALC_FREQ_DIV  = 4'd8,
+    DONE           = 4'd9
+  } state_t;
+
+  state_t state, next_state;
+
   logic [WIDTH-1:0] ad_data;
   logic [$clog2(FFT_SIZE)-1:0] sample_cnt;
+  logic [15:0] hann_coeff;
+  logic signed [15:0] ad_data_signed, hann_coeff_signed;
+  logic signed [31:0] windowed_product;
+  logic [3:0] mult_delay;
+
+  logic s_axis_data_tready, s_axis_data_tvalid, s_axis_data_tlast;
+  logic [31:0] s_axis_data_tdata;
+  logic [31:0] m_axis_data_tdata;
+  logic m_axis_data_tvalid, m_axis_data_tlast;
+
+  logic signed [15:0] fft_real, fft_imag;
+  logic signed [31:0] real_squared, imag_squared;
+  logic [32:0] magnitude_squared;
+  logic magnitude_valid;
+  logic [1:0] tvalid_mag_delay;
+
+  logic [12:0] bin_counter;
+  logic [32:0] mag_prev, mag_curr, mag_next;
+  logic [12:0] bin_prev, bin_curr, bin_next;
+  logic [32:0] peak_magnitude;
+  logic [32:0] peak_mag_prev, peak_mag_curr, peak_mag_next;
+  logic [12:0] peak_bin;
+
+  logic signed [34:0] alpha, beta, gamma;
+  logic signed [35:0] delta_num, delta_den;
+  logic signed [63:0] delta_calc;
+  logic signed [31:0] delta;  // Q16.16 
+  logic signed [47:0] interpolated_bin;
+
+  logic signed [63:0] freq_temp;
+  logic [127:0] freq_calc;
 
   ad #(
       .WIDTH(WIDTH)
   ) u_ad (
-      .clk    (clk),
-      .ad_pin (ad_pin),
+      .clk(clk),
+      .ad_pin(ad_pin),
       .ad_data(ad_data)
   );
 
-  logic [$clog2(FFT_SIZE)-1:0] window_addr;
-  logic [15:0] window_coeff;
-
-  assign window_addr = sample_cnt;
-
   hann_window_rom u_hann_rom (
       .clka (clk),
-      .addra(window_addr),
-      .douta(window_coeff)
+      .addra(sample_cnt),
+      .douta(hann_coeff)
   );
 
-  logic signed [15:0] ad_data_signed;
-  logic signed [15:0] window_coeff_signed;
-  logic signed [31:0] windowed_product;
-  logic mult_valid;
-
-  assign ad_data_signed = $signed({6'b0, ad_data});
-
-  assign window_coeff_signed = $signed(window_coeff);
+  assign ad_data_signed = $signed({1'b0, ad_data} - 10'd512) <<< 5;
+  assign hann_coeff_signed = $signed({1'b0, hann_coeff[14:0]});
 
   window_mult u_window_mult (
       .CLK(clk),
       .SCLR(~rst_n),
-      .CE(s_axis_data_tready),
-      .A(window_coeff_signed),
+      .CE(state == COLLECT && s_axis_data_tready),
+      .A(hann_coeff_signed),
       .B(ad_data_signed),
       .P(windowed_product)
   );
 
-  logic [3:0] tready_delay;
   always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) tready_delay <= '0;
-    else tready_delay <= {tready_delay[2:0], s_axis_data_tready};
+    if (!rst_n) mult_delay <= '0;
+    else mult_delay <= {mult_delay[2:0], (state == COLLECT && s_axis_data_tready)};
   end
-  assign mult_valid = tready_delay[3];  
 
-  logic [7:0] s_axis_config_tdata;
-  logic s_axis_config_tvalid;
-
-  logic [31:0] s_axis_data_tdata;
-  logic s_axis_data_tvalid;
-  logic s_axis_data_tlast;
-
-  assign s_axis_config_tdata = 8'b0000_0001;  
-  assign s_axis_config_tvalid = 1'b1;
-
-  assign s_axis_data_tdata = {16'b0, windowed_product[30:15]};
-  assign s_axis_data_tvalid = mult_valid;
+  assign s_axis_data_tvalid = mult_delay[3];
+  assign s_axis_data_tdata  = {16'b0, windowed_product[30:15]};
+  assign s_axis_data_tlast  = (sample_cnt == FFT_SIZE - 1) && mult_delay[3];
 
   always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      sample_cnt <= '0;
-    end else begin
-      if (s_axis_data_tready) begin
-        sample_cnt <= sample_cnt + 1'b1;
-      end
+    if (!rst_n) sample_cnt <= '0;
+    else if (state == IDLE) sample_cnt <= '0;
+    else if (state == COLLECT && s_axis_data_tready) begin
+      sample_cnt <= (sample_cnt == FFT_SIZE - 1) ? '0 : sample_cnt + 1;
     end
   end
 
-  assign s_axis_data_tlast = (sample_cnt == FFT_SIZE - 1);
-
-  logic [31:0] m_axis_data_tdata;
-  logic m_axis_data_tvalid;
-  logic m_axis_data_tlast;
-
   ad_fft u_ad_fft (
       .aclk(clk),
-      .s_axis_config_tdata(s_axis_config_tdata),
-      .s_axis_config_tvalid(s_axis_config_tvalid),
+      .s_axis_config_tdata(8'b0000_0001),
+      .s_axis_config_tvalid(1'b1),
       .s_axis_data_tdata(s_axis_data_tdata),
       .s_axis_data_tvalid(s_axis_data_tvalid),
       .s_axis_data_tready(s_axis_data_tready),
@@ -163,16 +179,8 @@ module frequency_fft #(
       .m_axis_data_tlast(m_axis_data_tlast)
   );
 
-  logic signed [15:0] fft_real;
-  logic signed [15:0] fft_imag;
-
   assign fft_real = $signed(m_axis_data_tdata[15:0]);
   assign fft_imag = $signed(m_axis_data_tdata[31:16]);
-
-  logic [31:0] real_squared;
-  logic [31:0] imag_squared;
-  logic mult_real_valid;
-  logic mult_imag_valid;
 
   real_square_mult u_real_mult (
       .CLK(clk),
@@ -182,7 +190,6 @@ module frequency_fft #(
       .B(fft_real),
       .P(real_squared)
   );
-
   imag_square_mult u_imag_mult (
       .CLK(clk),
       .SCLR(~rst_n),
@@ -192,163 +199,145 @@ module frequency_fft #(
       .P(imag_squared)
   );
 
-  logic [1:0] tvalid_mag_delay;
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) tvalid_mag_delay <= '0;
     else tvalid_mag_delay <= {tvalid_mag_delay[0], m_axis_data_tvalid};
   end
-
-  logic [31:0] magnitude_squared;
-  logic magnitude_valid;
+  assign magnitude_valid = tvalid_mag_delay[1];
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       magnitude_squared <= '0;
-      magnitude_valid   <= 1'b0;
-    end else begin
-      magnitude_squared <= real_squared + imag_squared;
-      magnitude_valid   <= tvalid_mag_delay[1];
+    end else if (tvalid_mag_delay[0]) begin
+      magnitude_squared <= $unsigned(real_squared) + $unsigned(imag_squared);
     end
   end
 
-  logic [31:0] max_magnitude;
-  logic [$clog2(FFT_SIZE)-1:0] max_bin_index;
-  logic [$clog2(FFT_SIZE)-1:0] bin_counter;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) state <= IDLE;
+    else state <= next_state;
+  end
 
-  logic [31:0] mag_prev;
-  logic [31:0] mag_curr;
-  logic [31:0] mag_next;
+  always_comb begin
+    next_state = state;
+    case (state)
+      IDLE: if (s_axis_data_tready) next_state = COLLECT;
+      COLLECT:
+      if (s_axis_data_tlast && s_axis_data_tvalid && s_axis_data_tready) next_state = PROCESS;
+      PROCESS: if (m_axis_data_tlast && magnitude_valid) next_state = INTERPOLATE;
+      INTERPOLATE: next_state = CALC_NUM_DEN;
+      CALC_NUM_DEN: next_state = CALC_DELTA;
+      CALC_DELTA: next_state = CALC_OFFSET;
+      CALC_OFFSET: next_state = CALC_FREQ_MULT;
+      CALC_FREQ_MULT: next_state = CALC_FREQ_DIV;
+      CALC_FREQ_DIV: next_state = DONE;
+      DONE: next_state = IDLE;
+      default: next_state = IDLE;
+    endcase
+  end
 
-  logic [31:0] mag_prev_temp;
-  logic [$clog2(FFT_SIZE)-1:0] prev_max_index;
-
-  typedef enum logic [2:0] {
-    IDLE,
-    SEARCHING,
-    INTERPOLATING,
-    DONE
-  } state_t;
-
-  state_t state;
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) bin_counter <= '0;
+    else if (state == IDLE || state == COLLECT) bin_counter <= '0;
+    else if (state == PROCESS && magnitude_valid) begin
+      bin_counter <= bin_counter + 1;
+    end
+  end
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      state <= IDLE;
-      max_magnitude <= '0;
-      max_bin_index <= '0;
-      bin_counter <= '0;
-      mag_prev <= '0;
-      mag_curr <= '0;
-      mag_next <= '0;
-      mag_prev_temp <= '0;
-      prev_max_index <= '0;
-      frequency_valid <= 1'b0;
+      mag_prev <= 0;
+      mag_curr <= 0;
+      mag_next <= 0;
+      bin_prev <= 0;
+      bin_curr <= 0;
+      bin_next <= 0;
+      peak_magnitude <= 0;
+      peak_bin <= 0;
+      peak_mag_prev <= 0;
+      peak_mag_curr <= 0;
+      peak_mag_next <= 0;
+      alpha <= 0;
+      beta <= 0;
+      gamma <= 0;
+      delta_num <= 0;
+      delta_den <= 0;
+      delta_calc <= 0;
+      delta <= 0;
+      interpolated_bin <= 0;
+      freq_temp <= 0;
+      frequency <= 0;
+      frequency_valid <= 0;
     end else begin
       case (state)
         IDLE: begin
-          frequency_valid <= 1'b0;
-          max_magnitude <= '0;
-          max_bin_index <= '0;
-          bin_counter <= '0;
-          mag_prev_temp <= '0;
-          prev_max_index <= '0;
-
-          if (magnitude_valid) begin
-            state <= SEARCHING;
-          end
+          mag_prev <= 0;
+          mag_curr <= 0;
+          mag_next <= 0;
+          bin_prev <= 0;
+          bin_curr <= 0;
+          bin_next <= 0;
+          peak_magnitude <= 0;
+          peak_bin <= 0;
+          peak_mag_prev <= 0;
+          peak_mag_curr <= 0;
+          peak_mag_next <= 0;
+          frequency_valid <= 0;
         end
-
-        SEARCHING: begin
+        PROCESS: begin
           if (magnitude_valid) begin
-            if (bin_counter > 0 && bin_counter < (FFT_SIZE / 2)) begin
-              if (magnitude_squared > max_magnitude) begin
-                mag_prev <= mag_prev_temp;
-                mag_curr <= magnitude_squared;
-                max_magnitude <= magnitude_squared;
-                prev_max_index <= max_bin_index;
-                max_bin_index <= bin_counter;
-              end else if (bin_counter == max_bin_index + 1) begin
-                mag_next <= magnitude_squared;
+            if (bin_curr >= 2 && bin_curr < FFT_SIZE / 2 - 1) begin
+              if (mag_curr > mag_prev && mag_curr > mag_next && mag_curr > peak_magnitude) begin
+                peak_magnitude <= mag_curr;
+                peak_bin <= bin_curr;
+                peak_mag_prev <= mag_prev;
+                peak_mag_curr <= mag_curr;
+                peak_mag_next <= mag_next;
               end
-              mag_prev_temp <= magnitude_squared;
             end
 
-            bin_counter <= bin_counter + 1'b1;
-
-            if (m_axis_data_tlast) begin
-              state <= INTERPOLATING;
-            end
+            mag_prev <= mag_curr;
+            mag_curr <= mag_next;
+            mag_next <= magnitude_squared;
+            bin_prev <= bin_curr;
+            bin_curr <= bin_next;
+            bin_next <= bin_counter;
           end
         end
-
-        INTERPOLATING: begin
-          state <= DONE;
+        INTERPOLATE: begin
+          alpha <= $signed({2'b00, peak_mag_prev});
+          beta  <= $signed({2'b00, peak_mag_curr});
+          gamma <= $signed({2'b00, peak_mag_next});
         end
-
+        CALC_NUM_DEN: begin
+          delta_num <= alpha - gamma;
+          delta_den <= (beta <<< 1) - alpha - gamma;  // 2β - α - γ
+        end
+        CALC_DELTA: begin
+          if (delta_den != 0) begin
+            delta_calc <= ($signed(delta_num) * 64'sd65536) / $signed(delta_den);
+            delta <= delta_calc[31:0];
+          end else begin
+            delta_calc <= 0;
+            delta <= 0;
+          end
+        end
+        CALC_OFFSET: begin
+          interpolated_bin <= ($signed({35'b0, peak_bin}) <<< 16) + delta;
+        end
+        CALC_FREQ_MULT: begin
+          freq_calc <= CLK_FREQUENCY * $unsigned(interpolated_bin);
+        end
+        CALC_FREQ_DIV: begin
+          freq_temp <= (freq_calc >>> 16) / FFT_SIZE;
+        end
         DONE: begin
-          frequency_valid <= 1'b1;
-          state <= IDLE;
+          frequency <= freq_temp[$clog2(MAX_FREQUENCY+1)-1:0];
+          frequency_valid <= 1;
         end
-
-        default: state <= IDLE;
+        default: begin
+        end
       endcase
-    end
-  end
-
-  logic signed [49:0] rife_numerator;
-  logic signed [32:0] rife_denominator;
-  logic [71:0] delta_quotient_full;
-  logic signed [31:0] delta_quotient;
-  logic rife_div_valid;
-  logic rife_div_ready;
-
-  logic start_division;
-  assign start_division = (state == INTERPOLATING);
-
-  always_comb begin
-    // δ = (mag_next - mag_prev) / (2*mag_curr - mag_prev - mag_next)
-    rife_numerator = ($signed({1'b0, mag_next}) - $signed({1'b0, mag_prev})) <<< 16;
-    rife_denominator = ($signed({1'b0, mag_curr}) <<< 1) - $signed({1'b0, mag_prev}) -
-        $signed({1'b0, mag_next});
-  end
-
-  rife_vincent_div u_divider (
-      .aclk(clk),
-      .aclken(1'b1),
-      .aresetn(rst_n),
-      .s_axis_dividend_tdata(rife_numerator),
-      .s_axis_dividend_tvalid(start_division),
-      .s_axis_dividend_tready(rife_div_ready),
-      .s_axis_divisor_tdata(rife_denominator),
-      .s_axis_divisor_tvalid(start_division),
-      .m_axis_dout_tdata(delta_quotient_full),
-      .m_axis_dout_tvalid(rife_div_valid)
-  );
-
-  assign delta_quotient = $signed(delta_quotient_full[31:0]);
-
-  logic signed [15:0] delta_fractional;
-  logic [47:0] freq_integer_part;
-  logic signed [47:0] freq_fractional_part;
-
-  always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-      delta_fractional <= '0;
-      frequency <= '0;
-    end else begin
-      if (rife_div_valid) begin
-        if (delta_quotient > 32'h0000_FFFF) delta_fractional <= 16'hFFFF;
-        else if (delta_quotient < -32'h0001_0000) delta_fractional <= -16'h10000;
-        else delta_fractional <= delta_quotient[15:0];
-
-        // f = (k + δ) × Fs / N
-        // = k × Fs / N + δ × Fs / N
-        freq_integer_part = (max_bin_index * CLK_FREQUENCY) >> $clog2(FFT_SIZE);
-        freq_fractional_part = ($signed(delta_fractional) * CLK_FREQUENCY) >>
-            ($clog2(FFT_SIZE) + 16);
-
-        frequency <= freq_integer_part + freq_fractional_part;
-      end
     end
   end
 

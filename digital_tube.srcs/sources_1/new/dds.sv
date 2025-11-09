@@ -5,7 +5,7 @@ module dds #(
 ) (
     input  logic                   clk,
     input  logic                   rst_n,
-    input  logic [PHASE_WIDTH-1:0] K,
+    input  logic [PHASE_WIDTH-1:0] K,             // 频率控制字
     output logic [ DATA_WIDTH-1:0] da_input_data
 );
 

@@ -10,21 +10,21 @@
    </db_ref_list>
    <zoom_setting>
       <ZoomStartTime time="0fs"></ZoomStartTime>
-      <ZoomEndTime time="10581fs"></ZoomEndTime>
+      <ZoomEndTime time="5514fs"></ZoomEndTime>
       <Cursor1Time time="0fs"></Cursor1Time>
    </zoom_setting>
    <column_width_setting>
-      <NameColumnWidth column_width="298"></NameColumnWidth>
-      <ValueColumnWidth column_width="284"></ValueColumnWidth>
+      <NameColumnWidth column_width="204"></NameColumnWidth>
+      <ValueColumnWidth column_width="196"></ValueColumnWidth>
    </column_width_setting>
    <WVObjectSize size="1" />
-   <wvobject fp_name="ad_input_pin_IBUF" type="array">
+   <wvobject fp_name="u_frequency_fft/delta" type="array">
       <obj_property name="DisplayName">FullPathName</obj_property>
-      <obj_property name="ElementShortName">ad_input_pin_IBUF[9:9]</obj_property>
-      <obj_property name="ObjectShortName">ad_input_pin_IBUF[9:9]</obj_property>
+      <obj_property name="ElementShortName">u_frequency_fft/delta[31:0]</obj_property>
+      <obj_property name="ObjectShortName">delta[31:0]</obj_property>
       <obj_property name="Radix">HEXRADIX</obj_property>
+      <obj_property name="isExpanded"></obj_property>
       <obj_property name="LABELRADIX">true</obj_property>
       <obj_property name="WaveformStyle">STYLE_DIGITAL</obj_property>
-      <obj_property name="isExpanded"></obj_property>
    </wvobject>
 </wave_config>

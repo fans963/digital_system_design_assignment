@@ -1,10 +1,10 @@
 -- Copyright 1986-2019 Xilinx, Inc. All Rights Reserved.
 -- --------------------------------------------------------------------------------
 -- Tool Version: Vivado v.2019.1 (win64) Build 2552052 Fri May 24 14:49:42 MDT 2019
--- Date        : Sun Oct 26 17:10:13 2025
+-- Date        : Sun Oct 26 17:10:12 2025
 -- Host        : DESKTOP-P2RT53N running 64-bit major release  (build 9200)
--- Command     : write_vhdl -force -mode synth_stub
---               d:/workspace/fpga/vivado/digital_tube/digital_tube.srcs/sources_1/ip/hann_window_rom/hann_window_rom_stub.vhdl
+-- Command     : write_vhdl -force -mode synth_stub -rename_top hann_window_rom -prefix
+--               hann_window_rom_ hann_window_rom_stub.vhdl
 -- Design      : hann_window_rom
 -- Purpose     : Stub declaration of top-level module interface
 -- Device      : xc7a35tcsg324-1

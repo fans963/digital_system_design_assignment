@@ -66,9 +66,12 @@ ENTITY ad_fft IS
     s_axis_data_tvalid : IN STD_LOGIC;
     s_axis_data_tready : OUT STD_LOGIC;
     s_axis_data_tlast : IN STD_LOGIC;
-    m_axis_data_tdata : OUT STD_LOGIC_VECTOR(63 DOWNTO 0);
+    m_axis_data_tdata : OUT STD_LOGIC_VECTOR(31 DOWNTO 0);
+    m_axis_data_tuser : OUT STD_LOGIC_VECTOR(7 DOWNTO 0);
     m_axis_data_tvalid : OUT STD_LOGIC;
     m_axis_data_tlast : OUT STD_LOGIC;
+    m_axis_status_tdata : OUT STD_LOGIC_VECTOR(7 DOWNTO 0);
+    m_axis_status_tvalid : OUT STD_LOGIC;
     event_frame_started : OUT STD_LOGIC;
     event_tlast_unexpected : OUT STD_LOGIC;
     event_tlast_missing : OUT STD_LOGIC;
@@ -126,12 +129,12 @@ ARCHITECTURE ad_fft_arch OF ad_fft IS
       s_axis_data_tvalid : IN STD_LOGIC;
       s_axis_data_tready : OUT STD_LOGIC;
       s_axis_data_tlast : IN STD_LOGIC;
-      m_axis_data_tdata : OUT STD_LOGIC_VECTOR(63 DOWNTO 0);
-      m_axis_data_tuser : OUT STD_LOGIC_VECTOR(0 DOWNTO 0);
+      m_axis_data_tdata : OUT STD_LOGIC_VECTOR(31 DOWNTO 0);
+      m_axis_data_tuser : OUT STD_LOGIC_VECTOR(7 DOWNTO 0);
       m_axis_data_tvalid : OUT STD_LOGIC;
       m_axis_data_tready : IN STD_LOGIC;
       m_axis_data_tlast : OUT STD_LOGIC;
-      m_axis_status_tdata : OUT STD_LOGIC_VECTOR(0 DOWNTO 0);
+      m_axis_status_tdata : OUT STD_LOGIC_VECTOR(7 DOWNTO 0);
       m_axis_status_tvalid : OUT STD_LOGIC;
       m_axis_status_tready : IN STD_LOGIC;
       event_frame_started : OUT STD_LOGIC;
@@ -153,9 +156,13 @@ ARCHITECTURE ad_fft_arch OF ad_fft IS
   ATTRIBUTE X_INTERFACE_INFO OF event_tlast_unexpected: SIGNAL IS "xilinx.com:signal:interrupt:1.0 event_tlast_unexpected_intf INTERRUPT";
   ATTRIBUTE X_INTERFACE_PARAMETER OF event_frame_started: SIGNAL IS "XIL_INTERFACENAME event_frame_started_intf, SENSITIVITY EDGE_RISING, PortWidth 1";
   ATTRIBUTE X_INTERFACE_INFO OF event_frame_started: SIGNAL IS "xilinx.com:signal:interrupt:1.0 event_frame_started_intf INTERRUPT";
+  ATTRIBUTE X_INTERFACE_INFO OF m_axis_status_tvalid: SIGNAL IS "xilinx.com:interface:axis:1.0 M_AXIS_STATUS TVALID";
+  ATTRIBUTE X_INTERFACE_PARAMETER OF m_axis_status_tdata: SIGNAL IS "XIL_INTERFACENAME M_AXIS_STATUS, TDATA_NUM_BYTES 1, TDEST_WIDTH 0, TID_WIDTH 0, TUSER_WIDTH 0, HAS_TREADY 0, HAS_TSTRB 0, HAS_TKEEP 0, HAS_TLAST 0, FREQ_HZ 100000000, PHASE 0.000, LAYERED_METADATA undef, INSERT_VIP 0";
+  ATTRIBUTE X_INTERFACE_INFO OF m_axis_status_tdata: SIGNAL IS "xilinx.com:interface:axis:1.0 M_AXIS_STATUS TDATA";
   ATTRIBUTE X_INTERFACE_INFO OF m_axis_data_tlast: SIGNAL IS "xilinx.com:interface:axis:1.0 M_AXIS_DATA TLAST";
   ATTRIBUTE X_INTERFACE_INFO OF m_axis_data_tvalid: SIGNAL IS "xilinx.com:interface:axis:1.0 M_AXIS_DATA TVALID";
-  ATTRIBUTE X_INTERFACE_PARAMETER OF m_axis_data_tdata: SIGNAL IS "XIL_INTERFACENAME M_AXIS_DATA, TDATA_NUM_BYTES 8, TDEST_WIDTH 0, TID_WIDTH 0, TUSER_WIDTH 0, HAS_TREADY 0, HAS_TSTRB 0, HAS_TKEEP 0, HAS_TLAST 1, FREQ_HZ 100000000, PHASE 0.000, LAYERED_METADATA undef, INSERT_VIP 0";
+  ATTRIBUTE X_INTERFACE_INFO OF m_axis_data_tuser: SIGNAL IS "xilinx.com:interface:axis:1.0 M_AXIS_DATA TUSER";
+  ATTRIBUTE X_INTERFACE_PARAMETER OF m_axis_data_tdata: SIGNAL IS "XIL_INTERFACENAME M_AXIS_DATA, TDATA_NUM_BYTES 4, TDEST_WIDTH 0, TID_WIDTH 0, TUSER_WIDTH 8, HAS_TREADY 0, HAS_TSTRB 0, HAS_TKEEP 0, HAS_TLAST 1, FREQ_HZ 100000000, PHASE 0.000, LAYERED_METADATA undef, INSERT_VIP 0";
   ATTRIBUTE X_INTERFACE_INFO OF m_axis_data_tdata: SIGNAL IS "xilinx.com:interface:axis:1.0 M_AXIS_DATA TDATA";
   ATTRIBUTE X_INTERFACE_INFO OF s_axis_data_tlast: SIGNAL IS "xilinx.com:interface:axis:1.0 S_AXIS_DATA TLAST";
   ATTRIBUTE X_INTERFACE_INFO OF s_axis_data_tready: SIGNAL IS "xilinx.com:interface:axis:1.0 S_AXIS_DATA TREADY";
@@ -174,9 +181,9 @@ BEGIN
       C_XDEVICEFAMILY => "artix7",
       C_S_AXIS_CONFIG_TDATA_WIDTH => 8,
       C_S_AXIS_DATA_TDATA_WIDTH => 32,
-      C_M_AXIS_DATA_TDATA_WIDTH => 64,
-      C_M_AXIS_DATA_TUSER_WIDTH => 1,
-      C_M_AXIS_STATUS_TDATA_WIDTH => 1,
+      C_M_AXIS_DATA_TDATA_WIDTH => 32,
+      C_M_AXIS_DATA_TUSER_WIDTH => 8,
+      C_M_AXIS_STATUS_TDATA_WIDTH => 8,
       C_THROTTLE_SCHEME => 0,
       C_CHANNELS => 1,
       C_NFFT_MAX => 13,
@@ -185,9 +192,9 @@ BEGIN
       C_USE_FLT_PT => 0,
       C_INPUT_WIDTH => 16,
       C_TWIDDLE_WIDTH => 16,
-      C_OUTPUT_WIDTH => 30,
-      C_HAS_SCALING => 0,
-      C_HAS_BFP => 0,
+      C_OUTPUT_WIDTH => 16,
+      C_HAS_SCALING => 1,
+      C_HAS_BFP => 1,
       C_HAS_ROUNDING => 1,
       C_HAS_ACLKEN => 0,
       C_HAS_ARESETN => 0,
@@ -217,9 +224,12 @@ BEGIN
       s_axis_data_tready => s_axis_data_tready,
       s_axis_data_tlast => s_axis_data_tlast,
       m_axis_data_tdata => m_axis_data_tdata,
+      m_axis_data_tuser => m_axis_data_tuser,
       m_axis_data_tvalid => m_axis_data_tvalid,
       m_axis_data_tready => '1',
       m_axis_data_tlast => m_axis_data_tlast,
+      m_axis_status_tdata => m_axis_status_tdata,
+      m_axis_status_tvalid => m_axis_status_tvalid,
       m_axis_status_tready => '1',
       event_frame_started => event_frame_started,
       event_tlast_unexpected => event_tlast_unexpected,

@@ -3,9 +3,7 @@
 module measure_duty_cycle #(
     parameter int WIDTH = 10,
     parameter int CLK_FREQUENCY = 10000000,
-    parameter int COUNTER_WIDTH = 24,
-    parameter logic [WIDTH-1:0] HIGH_THRESHOLD = WIDTH'(550),
-    parameter logic [WIDTH-1:0] LOW_THRESHOLD = WIDTH'(500)
+    parameter int COUNTER_WIDTH = 24
 ) (
     input  logic                     clk,
     input  logic                     rst_n,
@@ -17,6 +15,9 @@ module measure_duty_cycle #(
   logic [WIDTH-1:0] ad_data;
   logic voltage_level;
 
+  logic [WIDTH-1:0] max_value, min_value, adaptive_threshold;
+  logic [COUNTER_WIDTH-1:0] sample_counter;
+
   ad #(
       .WIDTH(WIDTH)
   ) u_ad (
@@ -24,15 +25,33 @@ module measure_duty_cycle #(
       .ad_pin (ad_pin),
       .ad_data(ad_data)
   );
+  always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      max_value <= '0;
+      min_value <= {WIDTH{1'b1}};
+      sample_counter <= '0;
+    end else begin
+      sample_counter <= sample_counter + 1;
+      if (ad_data > max_value) max_value <= ad_data;
+      if (ad_data < min_value) min_value <= ad_data;
+      if (sample_counter == {COUNTER_WIDTH{1'd1}}) begin
+        max_value <= ad_data;
+        min_value <= ad_data;
+        sample_counter <= '0;
+      end
+    end
+  end
+
+  assign adaptive_threshold = min_value + ((max_value - min_value) >> 1);
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       voltage_level <= 1'b0;
     end else begin
       if (!voltage_level) begin
-        if (ad_data >= HIGH_THRESHOLD) voltage_level <= 1'b1;
+        if (ad_data >= adaptive_threshold) voltage_level <= 1'b1;
       end else begin
-        if (ad_data <= LOW_THRESHOLD) voltage_level <= 1'b0;
+        if (ad_data < adaptive_threshold) voltage_level <= 1'b0;
       end
     end
   end

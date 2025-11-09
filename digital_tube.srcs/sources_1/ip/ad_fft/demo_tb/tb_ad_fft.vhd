@@ -103,8 +103,13 @@ architecture tb of tb_ad_fft is
 
   -- Data master channel signals
   signal m_axis_data_tvalid          : std_logic := '0';  -- payload is valid
-  signal m_axis_data_tdata           : std_logic_vector(63 downto 0) := (others => '0');  -- data payload
+  signal m_axis_data_tdata           : std_logic_vector(31 downto 0) := (others => '0');  -- data payload
+  signal m_axis_data_tuser           : std_logic_vector(7 downto 0) := (others => '0');  -- user-defined payload
   signal m_axis_data_tlast           : std_logic := '0';  -- indicates end of packet
+
+  -- Status master channel signals
+  signal m_axis_status_tvalid        : std_logic := '0';  -- payload is valid
+  signal m_axis_status_tdata         : std_logic_vector(7 downto 0) := (others => '0');  -- data payload
 
   -- Event signals
   signal event_frame_started         : std_logic := '0';
@@ -127,8 +132,12 @@ architecture tb of tb_ad_fft is
   signal s_axis_data_tdata_im             : std_logic_vector(15 downto 0) := (others => '0');  -- imaginary data
 
   -- Data master channel alias signals
-  signal m_axis_data_tdata_re             : std_logic_vector(29 downto 0) := (others => '0');  -- real data
-  signal m_axis_data_tdata_im             : std_logic_vector(29 downto 0) := (others => '0');  -- imaginary data
+  signal m_axis_data_tdata_re             : std_logic_vector(15 downto 0) := (others => '0');  -- real data
+  signal m_axis_data_tdata_im             : std_logic_vector(15 downto 0) := (others => '0');  -- imaginary data
+  signal m_axis_data_tuser_blk_exp        : std_logic_vector(4 downto 0) := (others => '0');  -- block exponent
+
+  -- Status master channel alias signals
+  signal m_axis_status_tdata_blk_exp      : std_logic_vector(4 downto 0) := (others => '0');  -- block exponent
 
   -----------------------------------------------------------------------
   -- Constants, types and functions to create input data
@@ -213,7 +222,10 @@ begin
       s_axis_data_tlast           => s_axis_data_tlast,
       m_axis_data_tvalid          => m_axis_data_tvalid,
       m_axis_data_tdata           => m_axis_data_tdata,
+      m_axis_data_tuser           => m_axis_data_tuser,
       m_axis_data_tlast           => m_axis_data_tlast,
+      m_axis_status_tvalid        => m_axis_status_tvalid,
+      m_axis_status_tdata         => m_axis_status_tdata,
       event_frame_started         => event_frame_started,
       event_tlast_unexpected      => event_tlast_unexpected,
       event_tlast_missing         => event_tlast_missing,
@@ -467,9 +479,8 @@ begin
       if m_axis_data_tvalid = '1' then
         -- Record output data such that it can be used as input data
         index := op_sample;
-        -- Truncate output data to match input data width
-        op_data(index).re <= m_axis_data_tdata(29 downto 14);
-        op_data(index).im <= m_axis_data_tdata(61 downto 46);
+        op_data(index).re <= m_axis_data_tdata(15 downto 0);
+        op_data(index).im <= m_axis_data_tdata(31 downto 16);
         -- Increment output sample counter
         if m_axis_data_tlast = '1' then  -- end of output frame: reset sample counter and increment frame counter
           op_sample <= 0;
@@ -497,12 +508,24 @@ begin
 
     -- Do not check the output payload values, as this requires a numerical model
     -- which would make this demonstration testbench unwieldy.
-    -- Instead, check the protocol of the data master channel:
+    -- Instead, check the protocol of the data and status master channels:
     -- check that the payload is valid (not X) when TVALID is high
 
     if m_axis_data_tvalid = '1' then
       if is_x(m_axis_data_tdata) then
         report "ERROR: m_axis_data_tdata is invalid when m_axis_data_tvalid is high" severity error;
+        check_ok := false;
+      end if;
+      if is_x(m_axis_data_tuser) then
+        report "ERROR: m_axis_data_tuser is invalid when m_axis_data_tvalid is high" severity error;
+        check_ok := false;
+      end if;
+
+    end if;
+
+    if m_axis_status_tvalid = '1' then
+      if is_x(m_axis_status_tdata) then
+        report "ERROR: m_axis_status_tdata is invalid when m_axis_status_tvalid is high" severity error;
         check_ok := false;
       end if;
 
@@ -525,8 +548,12 @@ begin
   s_axis_data_tdata_im           <= s_axis_data_tdata(31 downto 16);
 
   -- Data master channel alias signals
-  m_axis_data_tdata_re           <= m_axis_data_tdata(29 downto 0);
-  m_axis_data_tdata_im           <= m_axis_data_tdata(61 downto 32);
+  m_axis_data_tdata_re           <= m_axis_data_tdata(15 downto 0);
+  m_axis_data_tdata_im           <= m_axis_data_tdata(31 downto 16);
+  m_axis_data_tuser_blk_exp      <= m_axis_data_tuser(4 downto 0);
+
+  -- Status master channel alias signals
+  m_axis_status_tdata_blk_exp    <= m_axis_status_tdata(4 downto 0);
 
 end tb;
 

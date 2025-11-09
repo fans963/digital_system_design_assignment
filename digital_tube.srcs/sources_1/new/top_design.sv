@@ -40,14 +40,23 @@ module top (
   logic [20:0] ad_frequency_integer;
   logic [22:0] fft_frequency;
   logic fft_frequency_valid;
+  logic [22:0] fft_frequency_display;
   logic [23:0] duty_cycle_decimal;
   logic duty_cycle_valid;
 
   logic [3:0] da_integer_bcd[0:4];
   logic [3:0] da_decimal_bcd[0:2];
-  logic [3:0] ad_integer_bcd[0:4];
+  logic [3:0] ad_integer_bcd[0:7];
   logic [3:0] fft_integer_bcd[0:7];
   logic [3:0] duty_cycle_decimal_bcd[0:1];
+
+  always_ff @(posedge clk_10Mhz or negedge rst_n) begin
+    if (!rst_n) begin
+      fft_frequency_display <= '0;
+    end else if (fft_frequency_valid) begin
+      fft_frequency_display <= fft_frequency;
+    end
+  end
 
   logic [2:0] push_button_shift;
   logic [1:0] key_pushed;
@@ -77,14 +86,12 @@ module top (
     end else begin
       key_pushed_d <= key_pushed;
 
-      if (key_pushed[0] && !key_pushed_d[0]) begin
-        if (right_switch_array_status == 8'b00010000)
-          if (push_button_shift != 3'd7) push_button_shift <= push_button_shift + 1'b1;
-      end
-
-      if (key_pushed[1] && !key_pushed_d[1]) begin
-        if (right_switch_array_status == 8'b00010000)
+      if (right_switch_array_status == 8'b00010000) begin
+        if (key_pushed[1] && !key_pushed_d[1]) begin
           if (push_button_shift != 3'd0) push_button_shift <= push_button_shift - 1'b1;
+        end else if (key_pushed[0] && !key_pushed_d[0]) begin
+          if (push_button_shift != 3'd7) push_button_shift <= push_button_shift + 1'b1;
+        end
       end
     end
   end
@@ -135,7 +142,7 @@ module top (
   );
   integer_bin_to_bcd #(
       .bin_width(21),
-      .bcd_width(5)
+      .bcd_width(8)
   ) u_integer_bin_to_bcd_1 (
       .binary(ad_frequency_integer),
       .bcd   (ad_integer_bcd)
@@ -161,7 +168,6 @@ module top (
       .binary_fraction(duty_cycle_decimal),
       .bcd            (duty_cycle_decimal_bcd)
   );
-
 
   always_comb begin
     case (right_switch_array_status)
@@ -191,14 +197,14 @@ module top (
       end
       8'b00000010: begin
         display_numbers = '{
-            {1'b0, 4'd0},
-            {1'b0, 4'd0},
-            {1'b0, 4'd0},
-            {1'b1, ad_integer_bcd[0]},
+            {1'b0, ad_integer_bcd[0]},
             {1'b0, ad_integer_bcd[1]},
             {1'b0, ad_integer_bcd[2]},
-            {1'b0, ad_integer_bcd[3]},
-            {1'b0, ad_integer_bcd[4]}
+            {1'b1, ad_integer_bcd[3]},
+            {1'b0, ad_integer_bcd[4]},
+            {1'b0, ad_integer_bcd[5]},
+            {1'b0, ad_integer_bcd[6]},
+            {1'b0, ad_integer_bcd[7]}
         };
       end
       8'b00000100: begin
@@ -393,9 +399,7 @@ module top (
       .frequency(ad_frequency_integer)
   );
 
-  frequency_fft #(
-      .FFT_SIZE(16384)
-  ) u_frequency_fft (
+  frequency_fft u_frequency_fft (
       .clk            (clk_10Mhz),
       .rst_n          (rst_n),
       .ad_pin         (ad_input_pin),
@@ -404,11 +408,9 @@ module top (
   );
 
   measure_duty_cycle #(
-      .WIDTH         (10),
-      .CLK_FREQUENCY (10000000),
-      .COUNTER_WIDTH (24),
-      .HIGH_THRESHOLD(550),
-      .LOW_THRESHOLD (500)
+      .WIDTH        (10),
+      .CLK_FREQUENCY(10000000),
+      .COUNTER_WIDTH(24)
   ) u_measure_duty_cycle (
       .clk               (clk_10Mhz),
       .rst_n             (rst_n),
